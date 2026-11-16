@@ -79,6 +79,7 @@ const App: React.FC = () => {
   const [isUploadingStaff, setIsUploadingStaff] = useState(false);
   const [isUploadingCar, setIsUploadingCar] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [persistenceMode, setPersistenceMode] = useState<'local' | 'redis' | 'tmp' | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   const staffFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -91,8 +92,9 @@ const App: React.FC = () => {
       try {
         const res = await fetch('/api/config', { cache: 'no-store' });
         if (!res.ok) return;
-        const data = (await res.json()) as SiteConfig;
+        const data = (await res.json()) as SiteConfig & { persistenceMode?: 'local' | 'redis' | 'tmp' };
         if (active && data) {
+          if (data.persistenceMode) setPersistenceMode(data.persistenceMode);
           setConfig(data);
           setDraftConfig(data);
           setCarImgError(false);
@@ -161,11 +163,19 @@ const App: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user: loginUser, pass: loginPass }),
       });
-      const data = (await res.json()) as { token?: string; error?: string };
+      const text = await res.text();
+      let data: { token?: string; error?: string; persistenceMode?: 'local' | 'redis' | 'tmp' } = {};
+      try {
+        data = JSON.parse(text);
+      } catch {
+        setLoginError('El servidor no respondió en formato válido. Verificá que las rutas /api estén activas.');
+        return;
+      }
       if (!res.ok || !data.token) {
         setLoginError(data.error || 'Credenciales incorrectas');
         return;
       }
+      if (data.persistenceMode) setPersistenceMode(data.persistenceMode);
       setAdminToken(data.token);
       try {
         sessionStorage.setItem(TOKEN_STORAGE_KEY, data.token);
@@ -175,7 +185,7 @@ const App: React.FC = () => {
       setLoginUser('');
       setLoginPass('');
     } catch {
-      setLoginError('Error de conexión con el servidor.');
+      setLoginError('No se pudo conectar con el servidor.');
     } finally {
       setIsLoggingIn(false);
     }
@@ -428,6 +438,12 @@ const App: React.FC = () => {
                 </form>
               ) : (
                 <form onSubmit={saveAdminChanges} className="space-y-6">
+                  {persistenceMode === 'tmp' && (
+                    <div className="text-xs rounded-xl px-4 py-3 border bg-amber-500/10 border-amber-500/30 text-amber-200 leading-relaxed">
+                      Vercel está usando almacenamiento temporal. Para que la foto del conductor y tus cambios queden permanentes entre reinicios, conectá una base <strong>Upstash Redis</strong> desde Vercel → Storage.
+                    </div>
+                  )}
+
                   {statusMessage && (
                     <div
                       className={`text-xs font-medium rounded-xl px-4 py-3 border ${
