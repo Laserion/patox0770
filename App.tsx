@@ -79,7 +79,7 @@ const App: React.FC = () => {
   const [isUploadingStaff, setIsUploadingStaff] = useState(false);
   const [isUploadingCar, setIsUploadingCar] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [persistenceMode, setPersistenceMode] = useState<'local' | 'redis' | 'tmp' | null>(null);
+  const [persistenceMode, setPersistenceMode] = useState<'local' | 'redis' | 'netlify-blobs' | 'tmp' | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   const staffFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -92,7 +92,9 @@ const App: React.FC = () => {
       try {
         const res = await fetch('/api/config', { cache: 'no-store' });
         if (!res.ok) return;
-        const data = (await res.json()) as SiteConfig & { persistenceMode?: 'local' | 'redis' | 'tmp' };
+        const data = (await res.json()) as SiteConfig & {
+          persistenceMode?: 'local' | 'redis' | 'netlify-blobs' | 'tmp';
+        };
         if (active && data) {
           if (data.persistenceMode) setPersistenceMode(data.persistenceMode);
           setConfig(data);
@@ -164,11 +166,15 @@ const App: React.FC = () => {
         body: JSON.stringify({ user: loginUser, pass: loginPass }),
       });
       const text = await res.text();
-      let data: { token?: string; error?: string; persistenceMode?: 'local' | 'redis' | 'tmp' } = {};
+      let data: {
+        token?: string;
+        error?: string;
+        persistenceMode?: 'local' | 'redis' | 'netlify-blobs' | 'tmp';
+      } = {};
       try {
         data = JSON.parse(text);
       } catch {
-        setLoginError('El servidor no respondió en formato válido. Verificá que las rutas /api estén activas.');
+        setLoginError(`El servidor respondió sin formato válido (HTTP ${res.status}). Verificá que la carpeta /api esté en la raíz del proyecto en Vercel.`);
         return;
       }
       if (!res.ok || !data.token) {
